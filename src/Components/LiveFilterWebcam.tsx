@@ -6,24 +6,57 @@ const LiveFilterWebcam = () => {
   const [filter, setFilter] = useState("none");
   const [text, setText] = useState("");
   const [stickers, setStickers] = useState([]);
+  const [recording, setRecording] = useState(false);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
 
   const startWebcam = () => {
     // Access webcam
     navigator.mediaDevices
-      .getUserMedia({ video: true })
+      .getUserMedia({ video: true, audio: true })
       .then((stream) => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+        }
+        videoStreamRef.current = stream;
+
+        // Prepare MediaRecorder if webcam is available
+        if (stream) {
+          const recorder = new MediaRecorder(stream);
+          mediaRecorderRef.current = recorder;
+          const chunks: Blob[] = [];
+          recorder.ondataavailable = (e) => chunks.push(e.data);
+          recorder.onstop = () => {
+            const recordedVideo = new Blob(chunks, { type: "video/webm" });
+            setRecordedBlob(recordedVideo);
+          };
         }
       })
       .catch((err) => console.error("Error accessing webcam:", err));
   };
 
   const stopWebcam = () => {
-    const stream = videoRef.current?.srcObject;
+    const stream = videoStreamRef.current;
     if (stream) {
       const tracks = stream.getTracks();
       tracks.forEach((track) => track.stop());
+    }
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
+  };
+
+  const startRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.start();
+      setRecording(true);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
     }
   };
 
@@ -136,6 +169,35 @@ const LiveFilterWebcam = () => {
           Add Sticker 2
         </button>
       </div>
+
+      {/* Recording Controls */}
+      <div className="flex gap-4 mt-4">
+        <button
+          onClick={startRecording}
+          disabled={recording}
+          className="bg-green-500 text-white px-4 py-2 rounded"
+        >
+          Start Recording
+        </button>
+        <button
+          onClick={stopRecording}
+          disabled={!recording}
+          className="bg-red-500 text-white px-4 py-2 rounded"
+        >
+          Stop Recording
+        </button>
+      </div>
+
+      {/* Video Download */}
+      {recordedBlob && (
+        <a
+          href={URL.createObjectURL(recordedBlob)}
+          download="recorded-video.webm"
+          className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
+        >
+          Download Video
+        </a>
+      )}
     </div>
   );
 };
